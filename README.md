@@ -1,81 +1,239 @@
-Arquitectura propuesta 
+# Sistema SOA - Venta de Plásticos
+
+Proyecto académico desarrollado con arquitectura orientada a servicios (SOA) para la gestión de una empresa distribuidora de productos plásticos.
+
+## Descripción
+
+El sistema implementa una arquitectura SOA utilizando servicios independientes que gestionan distintas áreas del negocio:
+
+- Inventario de productos plásticos
+- Gestión de clientes
+- Gestión de ventas
+- Persistencia de datos con MySQL
+- Contenerización mediante Docker
+
+Cada servicio funciona de manera independiente y puede ser consumido mediante APIs REST.
+
+---
+
+## Arquitectura del sistema
+
+```text
                         +----------------------+
                         | Aplicación Cliente   |
-                        | (Panel Web/Ventas)   |
+                        | (Panel Web/API)      |
                         +----------+-----------+
-                                   |
                                    |
                             +------+------+
                             | ESB / BUS   |
-                            | SOA Router  |
+                            | Apache Camel|
                             +---+------+--+
                                 |      |
-             +------------------+      +------------------+
-             |                                         |
-+------------+---------+             +------------------+----------+
-| Servicio Inventario  |             | Servicio Clientes           |
-| Productos plásticos  |             | Clientes y empresas         |
-+------------+---------+             +------------------+----------+
-             |                                         |
-             +------------------+----------------------+
-                                |
-                     +----------+-----------+
-                     | Servicio Ventas      |
-                     | Pedidos y facturas   |
-                     +----------+-----------+
-                                |
-                         +------+------+
-                         | MySQL       |
-                         +-------------+
+            +-------------------+------+-------------------+
+            |                                          |
++-----------+---------+                +-----------------+--------+
+| Inventario           |                | Clientes                 |
+| Productos plásticos  |                | Registro de clientes     |
++-----------+---------+                +-----------------+--------+
+            |                                          |
+            +----------------+-------------------------+
+                             |
+                  +----------+----------+
+                  | Ventas              |
+                  | Registro pedidos    |
+                  +----------+----------+
+                             |
+                      +------+------+
+                      | MySQL       |
+                      +-------------+
+```
 
-Proyecto SOA venta de plásticos
-Los tres servicios (contratos) quedarían así:
+---
 
-Servicio 1: Inventario de Plásticos
+## Tecnologías utilizadas
 
-Responsabilidad:
+- Node.js
+- Express
+- MySQL
+- Sequelize ORM
+- Docker
+- Docker Compose
+- Apache Camel (ESB)
 
-Registrar productos plásticos
-Consultar stock
-Actualizar cantidades
+---
 
-Tabla:
-Ejemplos de datos:
+## Estructura del proyecto
 
-id	nombre	tipo	precio	stock
-1	Polietileno	Bolsa industrial	10.50	100
-2	PVC	Tubo	22.30	50
-3	Polipropileno	Lámina	15.20	80
+```text
+proyecto-soa-plasticos/
 
-API:
+├── clientes/
+│   ├── config/
+│   ├── models/
+│   ├── app.js
+│   └── Dockerfile
+│
+├── inventario/
+│   ├── config/
+│   ├── models/
+│   ├── app.js
+│   └── Dockerfile
+│
+├── ventas/
+│   ├── config/
+│   ├── models/
+│   ├── app.js
+│   └── Dockerfile
+│
+├── database/
+│   └── init.sql
+│
+├── docker-compose.yml
+│
+└── README.md
+```
 
+---
+
+## Servicios implementados
+
+### Servicio Inventario
+
+Permite administrar productos plásticos disponibles.
+
+Endpoints:
+
+```http
 GET /productos
-GET /productos/:id
 POST /productos
-PUT /productos/:id
-Ejecutar:
+```
+
+Ejemplo:
+
+```json
+{
+    "nombre":"PVC",
+    "tipo":"Tubo",
+    "precio":22.50,
+    "stock":40
+}
+```
+
+---
+
+### Servicio Clientes
+
+Permite registrar y consultar clientes.
+
+Endpoints:
+
+```http
+GET /clientes
+POST /clientes
+```
+
+Ejemplo:
+
+```json
+{
+    "nombre":"Carlos Ruiz",
+    "empresa":"Constructora Perú SAC",
+    "telefono":"999888777",
+    "correo":"carlos@empresa.com"
+}
+```
+
+---
+
+### Servicio Ventas
+
+Permite registrar pedidos y ventas.
+
+Endpoints:
+
+```http
+GET /ventas
+POST /ventas
+```
+
+Ejemplo:
+
+```json
+{
+    "cliente_id":1,
+    "producto_id":1,
+    "cantidad":10,
+    "total":225
+}
+```
+
+---
+
+## Instalación
+
+### Clonar repositorio
+
+```bash
+git clone https://github.com/usuario/proyecto-soa-plasticos.git
+```
+
+Entrar al proyecto:
+
+```bash
+cd proyecto-soa-plasticos
+```
+
+---
+
+## Ejecutar con Docker
+
+Construir contenedores:
+
+```bash
 docker compose up --build
+```
 
-Servicios:
-GET/POST http://localhost:3001/productos
-GET/POST http://localhost:3002/clientes
-GET/POST http://localhost:3003/ventas
+Ejecutar en segundo plano:
 
-Servicio 2: Clientes
+```bash
+docker compose up -d
+```
 
-Responsabilidad:
+Detener contenedores:
 
-Registrar clientes
-Consultar clientes
+```bash
+docker compose down
+```
 
-Tabla:
+---
 
-CREATE TABLE clientes(
+## Puertos utilizados
 
-id INT AUTO_INCREMENT PRIMARY KEY,
-nombre VARCHAR(100),
-empresa VARCHAR(100),
-telefono VARCHAR(30),
-correo VARCHAR(100)
+| Servicio | Puerto |
+|-----------|---------|
+| MySQL | 3306 |
+| Inventario | 3001 |
+| Clientes | 3002 |
+| Ventas | 3003 |
 
-);
+---
+
+## Base de datos
+
+Motor utilizado:
+
+MySQL
+
+Configuración:
+
+```env
+MYSQL_ROOT_PASSWORD=123456
+MYSQL_DATABASE=soa_db
+```
+
+---
+
+## Autor
+
+Proyecto desarrollado para práctica académica de Arquitectura SOA.
+
