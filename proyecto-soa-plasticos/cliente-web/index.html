@@ -1,0 +1,541 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>PlastiSOA — Sistema de Gestión</title>
+  <style>
+    /* ── Tokens ─────────────────────────────────────────── */
+    :root {
+      --bg:        #0f1117;
+      --surface:   #1a1d27;
+      --border:    #2a2d3a;
+      --accent:    #3b82f6;
+      --accent2:   #06b6d4;
+      --ok:        #10b981;
+      --warn:      #f59e0b;
+      --danger:    #ef4444;
+      --text:      #e2e8f0;
+      --muted:     #64748b;
+      --font-mono: 'Courier New', monospace;
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+    }
+
+    /* ── Header ─────────────────────────────────────────── */
+    header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 2rem;
+      height: 60px;
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      position: sticky; top: 0; z-index: 100;
+    }
+    .logo {
+      font-size: 1.1rem;
+      font-weight: 700;
+      letter-spacing: .5px;
+    }
+    .logo span { color: var(--accent); }
+    .services-status { display: flex; gap: 1rem; }
+    .status-dot {
+      display: flex; align-items: center; gap: .4rem;
+      font-size: .75rem; color: var(--muted);
+    }
+    .dot {
+      width: 8px; height: 8px; border-radius: 50%;
+      background: var(--muted);
+      transition: background .3s;
+    }
+    .dot.ok   { background: var(--ok); }
+    .dot.fail { background: var(--danger); }
+
+    /* ── Layout ──────────────────────────────────────────── */
+    .layout { display: flex; height: calc(100vh - 60px); }
+
+    nav {
+      width: 200px;
+      background: var(--surface);
+      border-right: 1px solid var(--border);
+      padding: 1.5rem 0;
+      flex-shrink: 0;
+    }
+    nav button {
+      display: flex; align-items: center; gap: .75rem;
+      width: 100%; padding: .7rem 1.5rem;
+      background: none; border: none; cursor: pointer;
+      color: var(--muted); font-size: .875rem; text-align: left;
+      transition: all .15s;
+    }
+    nav button:hover { color: var(--text); background: rgba(255,255,255,.04); }
+    nav button.active {
+      color: var(--accent); background: rgba(59,130,246,.1);
+      border-right: 2px solid var(--accent);
+    }
+    nav .icon { font-size: 1rem; width: 20px; text-align: center; }
+
+    main {
+      flex: 1; overflow-y: auto;
+      padding: 2rem;
+    }
+
+    /* ── Cards ───────────────────────────────────────────── */
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1.5rem;
+      margin-bottom: 1.5rem;
+    }
+    .card h2 {
+      font-size: 1rem; font-weight: 600;
+      margin-bottom: 1.25rem;
+      padding-bottom: .75rem;
+      border-bottom: 1px solid var(--border);
+      color: var(--text);
+    }
+
+    /* ── Forms ───────────────────────────────────────────── */
+    .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: .75rem; }
+    .form-full  { grid-column: 1 / -1; }
+    label { display: block; font-size: .78rem; color: var(--muted); margin-bottom: .3rem; }
+    input, select {
+      width: 100%; padding: .55rem .75rem;
+      background: var(--bg); border: 1px solid var(--border);
+      border-radius: 6px; color: var(--text); font-size: .875rem;
+      transition: border-color .15s;
+    }
+    input:focus, select:focus {
+      outline: none; border-color: var(--accent);
+    }
+    select option { background: var(--bg); }
+    .btn {
+      padding: .55rem 1.25rem;
+      border-radius: 6px; border: none; cursor: pointer;
+      font-size: .875rem; font-weight: 500; transition: opacity .15s;
+    }
+    .btn:hover { opacity: .85; }
+    .btn-primary { background: var(--accent); color: #fff; }
+    .btn-sm { padding: .35rem .8rem; font-size: .78rem; }
+    .mt { margin-top: 1rem; }
+
+    /* ── Table ───────────────────────────────────────────── */
+    .table-wrap { overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; font-size: .85rem; }
+    th {
+      text-align: left; padding: .6rem .75rem;
+      color: var(--muted); font-weight: 500; font-size: .75rem;
+      border-bottom: 1px solid var(--border); white-space: nowrap;
+    }
+    td { padding: .65rem .75rem; border-bottom: 1px solid rgba(255,255,255,.04); }
+    tr:last-child td { border-bottom: none; }
+    tr:hover td { background: rgba(255,255,255,.025); }
+
+    .badge {
+      display: inline-block; padding: .2rem .55rem;
+      border-radius: 4px; font-size: .72rem; font-weight: 600;
+    }
+    .badge-blue  { background: rgba(59,130,246,.15); color: var(--accent); }
+    .badge-green { background: rgba(16,185,129,.15); color: var(--ok); }
+    .badge-warn  { background: rgba(245,158,11,.15); color: var(--warn); }
+    .badge-red   { background: rgba(239,68,68,.15);  color: var(--danger); }
+
+    /* ── Toast ───────────────────────────────────────────── */
+    #toast {
+      position: fixed; bottom: 1.5rem; right: 1.5rem;
+      padding: .8rem 1.25rem; border-radius: 8px;
+      font-size: .875rem; font-weight: 500;
+      display: none; z-index: 999;
+      animation: slideIn .2s ease;
+    }
+    #toast.show { display: block; }
+    #toast.ok   { background: var(--ok);     color: #fff; }
+    #toast.err  { background: var(--danger); color: #fff; }
+    @keyframes slideIn {
+      from { transform: translateY(10px); opacity: 0; }
+      to   { transform: translateY(0);   opacity: 1; }
+    }
+
+    /* ── Empty state ─────────────────────────────────────── */
+    .empty {
+      text-align: center; padding: 2.5rem; color: var(--muted);
+      font-size: .875rem;
+    }
+    .loader { color: var(--muted); font-size: .85rem; padding: .5rem 0; }
+
+    /* ── ESB badge ───────────────────────────────────────── */
+    .esb-tag {
+      font-size: .7rem; font-family: var(--font-mono);
+      background: rgba(6,182,212,.1); color: var(--accent2);
+      border: 1px solid rgba(6,182,212,.2);
+      padding: .15rem .45rem; border-radius: 3px;
+      margin-left: .5rem;
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="logo">Plasti<span>SOA</span> <span class="esb-tag">ESB</span></div>
+  <div class="services-status">
+    <div class="status-dot"><div class="dot" id="dot-inventario"></div>Inventario</div>
+    <div class="status-dot"><div class="dot" id="dot-clientes"></div>Clientes</div>
+    <div class="status-dot"><div class="dot" id="dot-ventas"></div>Ventas</div>
+  </div>
+</header>
+
+<div class="layout">
+  <nav>
+    <button class="active" onclick="showSection('inventario')">
+      <span class="icon">📦</span> Inventario
+    </button>
+    <button onclick="showSection('clientes')">
+      <span class="icon">👥</span> Clientes
+    </button>
+    <button onclick="showSection('ventas')">
+      <span class="icon">🧾</span> Ventas
+    </button>
+  </nav>
+
+  <main>
+
+    <!-- ── INVENTARIO ──────────────────────────────────── -->
+    <section id="sec-inventario">
+      <div class="card">
+        <h2>Registrar producto</h2>
+        <div class="form-grid">
+          <div>
+            <label>Nombre</label>
+            <input id="p-nombre" placeholder="PVC Rígido"/>
+          </div>
+          <div>
+            <label>Tipo</label>
+            <input id="p-tipo" placeholder="Tubo, Lámina, Granulo…"/>
+          </div>
+          <div>
+            <label>Precio (S/.)</label>
+            <input id="p-precio" type="number" step="0.01" placeholder="22.50"/>
+          </div>
+          <div>
+            <label>Stock inicial</label>
+            <input id="p-stock" type="number" placeholder="40"/>
+          </div>
+        </div>
+        <div class="mt">
+          <button class="btn btn-primary" onclick="crearProducto()">Registrar producto</button>
+        </div>
+      </div>
+      <div class="card">
+        <h2>Productos en inventario</h2>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>#</th><th>Nombre</th><th>Tipo</th><th>Precio</th><th>Stock</th></tr>
+            </thead>
+            <tbody id="tabla-productos"><tr><td colspan="5" class="loader">Cargando…</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── CLIENTES ───────────────────────────────────── -->
+    <section id="sec-clientes" style="display:none">
+      <div class="card">
+        <h2>Registrar cliente</h2>
+        <div class="form-grid">
+          <div>
+            <label>Nombre completo</label>
+            <input id="c-nombre" placeholder="Carlos Ruiz"/>
+          </div>
+          <div>
+            <label>Empresa</label>
+            <input id="c-empresa" placeholder="Constructora Perú SAC"/>
+          </div>
+          <div>
+            <label>Teléfono</label>
+            <input id="c-telefono" placeholder="999888777"/>
+          </div>
+          <div>
+            <label>Correo</label>
+            <input id="c-correo" type="email" placeholder="carlos@empresa.com"/>
+          </div>
+        </div>
+        <div class="mt">
+          <button class="btn btn-primary" onclick="crearCliente()">Registrar cliente</button>
+        </div>
+      </div>
+      <div class="card">
+        <h2>Clientes registrados</h2>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>#</th><th>Nombre</th><th>Empresa</th><th>Teléfono</th><th>Correo</th></tr>
+            </thead>
+            <tbody id="tabla-clientes"><tr><td colspan="5" class="loader">Cargando…</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── VENTAS ─────────────────────────────────────── -->
+    <section id="sec-ventas" style="display:none">
+      <div class="card">
+        <h2>Registrar venta <span class="esb-tag">orquestado por ESB</span></h2>
+        <div class="form-grid">
+          <div>
+            <label>Cliente</label>
+            <select id="v-cliente"><option value="">— seleccionar —</option></select>
+          </div>
+          <div>
+            <label>Producto</label>
+            <select id="v-producto" onchange="calcularTotal()">
+              <option value="">— seleccionar —</option>
+            </select>
+          </div>
+          <div>
+            <label>Cantidad</label>
+            <input id="v-cantidad" type="number" min="1" value="1" oninput="calcularTotal()"/>
+          </div>
+          <div>
+            <label>Total (S/.) — calculado</label>
+            <input id="v-total" readonly placeholder="0.00"
+                   style="background:rgba(59,130,246,.06); cursor:default;"/>
+          </div>
+        </div>
+        <div class="mt">
+          <button class="btn btn-primary" onclick="crearVenta()">Confirmar venta</button>
+        </div>
+      </div>
+      <div class="card">
+        <h2>Ventas registradas</h2>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>#</th><th>Cliente ID</th><th>Producto ID</th><th>Cantidad</th><th>Total</th><th>Fecha</th></tr>
+            </thead>
+            <tbody id="tabla-ventas"><tr><td colspan="6" class="loader">Cargando…</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<div id="toast"></div>
+
+<script>
+// ── Configuración ──────────────────────────────────────────
+const ESB = 'http://localhost:8080/api';
+
+// Cache de productos para calcular total
+let productosCache = [];
+
+// ── Navegación ─────────────────────────────────────────────
+function showSection(name) {
+  ['inventario','clientes','ventas'].forEach(s => {
+    document.getElementById('sec-' + s).style.display = s === name ? '' : 'none';
+  });
+  document.querySelectorAll('nav button').forEach((b, i) => {
+    b.classList.toggle('active', ['inventario','clientes','ventas'][i] === name);
+  });
+  if (name === 'inventario') loadProductos();
+  if (name === 'clientes')   loadClientes();
+  if (name === 'ventas')     loadVentas();
+}
+
+// ── Toast ──────────────────────────────────────────────────
+function toast(msg, type = 'ok') {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'show ' + type;
+  setTimeout(() => t.className = '', 3000);
+}
+
+// ── Health checks ──────────────────────────────────────────
+async function checkHealth() {
+  const services = ['inventario', 'clientes', 'ventas'];
+  const ports    = [3001, 3002, 3003];
+  for (let i = 0; i < services.length; i++) {
+    const dot = document.getElementById('dot-' + services[i]);
+    try {
+      // Intentar llamar directo al servicio (útil en desarrollo sin ESB)
+      const r = await fetch(`http://localhost:${ports[i]}/health`, { signal: AbortSignal.timeout(2000) });
+      dot.className = 'dot ' + (r.ok ? 'ok' : 'fail');
+    } catch {
+      dot.className = 'dot fail';
+    }
+  }
+}
+
+// ── INVENTARIO ─────────────────────────────────────────────
+async function loadProductos() {
+  try {
+    const r = await fetch(`${ESB}/productos`);
+    const { data } = await r.json();
+    productosCache = data || [];
+    const tbody = document.getElementById('tabla-productos');
+    if (!data?.length) { tbody.innerHTML = '<tr><td colspan="5" class="empty">Sin productos</td></tr>'; return; }
+    tbody.innerHTML = data.map(p => `
+      <tr>
+        <td>${p.id}</td>
+        <td>${p.nombre}</td>
+        <td><span class="badge badge-blue">${p.tipo}</span></td>
+        <td>S/. ${parseFloat(p.precio).toFixed(2)}</td>
+        <td>${stockBadge(p.stock)}</td>
+      </tr>`).join('');
+    // Actualizar select de ventas
+    const sel = document.getElementById('v-producto');
+    const prev = sel.value;
+    sel.innerHTML = '<option value="">— seleccionar —</option>' +
+      data.map(p => `<option value="${p.id}" data-precio="${p.precio}" data-stock="${p.stock}">
+        ${p.nombre} (stock: ${p.stock})
+      </option>`).join('');
+    sel.value = prev;
+  } catch { document.getElementById('tabla-productos').innerHTML = '<tr><td colspan="5" class="empty">Error al conectar con el ESB</td></tr>'; }
+}
+
+function stockBadge(s) {
+  if (s === 0)  return `<span class="badge badge-red">Sin stock</span>`;
+  if (s < 10)   return `<span class="badge badge-warn">${s} unid.</span>`;
+  return `<span class="badge badge-green">${s} unid.</span>`;
+}
+
+async function crearProducto() {
+  const body = {
+    nombre: document.getElementById('p-nombre').value.trim(),
+    tipo:   document.getElementById('p-tipo').value.trim(),
+    precio: parseFloat(document.getElementById('p-precio').value),
+    stock:  parseInt(document.getElementById('p-stock').value) || 0,
+  };
+  if (!body.nombre || !body.tipo || isNaN(body.precio))
+    return toast('Completa nombre, tipo y precio', 'err');
+  try {
+    const r = await fetch(`${ESB}/productos`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    const d = await r.json();
+    if (d.success) { toast('Producto registrado'); loadProductos(); }
+    else toast(d.message, 'err');
+  } catch { toast('Error de red', 'err'); }
+}
+
+// ── CLIENTES ───────────────────────────────────────────────
+async function loadClientes() {
+  try {
+    const r = await fetch(`${ESB}/clientes`);
+    const { data } = await r.json();
+    const tbody = document.getElementById('tabla-clientes');
+    if (!data?.length) { tbody.innerHTML = '<tr><td colspan="5" class="empty">Sin clientes</td></tr>'; return; }
+    tbody.innerHTML = data.map(c => `
+      <tr>
+        <td>${c.id}</td>
+        <td>${c.nombre}</td>
+        <td>${c.empresa || '—'}</td>
+        <td>${c.telefono || '—'}</td>
+        <td>${c.correo || '—'}</td>
+      </tr>`).join('');
+    // Actualizar select de ventas
+    const sel = document.getElementById('v-cliente');
+    const prev = sel.value;
+    sel.innerHTML = '<option value="">— seleccionar —</option>' +
+      data.map(c => `<option value="${c.id}">${c.nombre} — ${c.empresa || 'Sin empresa'}</option>`).join('');
+    sel.value = prev;
+  } catch { document.getElementById('tabla-clientes').innerHTML = '<tr><td colspan="5" class="empty">Error al conectar</td></tr>'; }
+}
+
+async function crearCliente() {
+  const body = {
+    nombre:   document.getElementById('c-nombre').value.trim(),
+    empresa:  document.getElementById('c-empresa').value.trim(),
+    telefono: document.getElementById('c-telefono').value.trim(),
+    correo:   document.getElementById('c-correo').value.trim(),
+  };
+  if (!body.nombre) return toast('El nombre es requerido', 'err');
+  try {
+    const r = await fetch(`${ESB}/clientes`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    const d = await r.json();
+    if (d.success) { toast('Cliente registrado'); loadClientes(); }
+    else toast(d.message, 'err');
+  } catch { toast('Error de red', 'err'); }
+}
+
+// ── VENTAS ─────────────────────────────────────────────────
+function calcularTotal() {
+  const sel = document.getElementById('v-producto');
+  const opt = sel.selectedOptions[0];
+  const qty = parseFloat(document.getElementById('v-cantidad').value) || 0;
+  const precio = opt ? parseFloat(opt.dataset.precio) || 0 : 0;
+  document.getElementById('v-total').value = (precio * qty).toFixed(2);
+}
+
+async function loadVentas() {
+  // También cargar listas para los selects
+  await Promise.all([loadProductos(), loadClientes()]);
+  try {
+    const r = await fetch(`${ESB}/ventas`);
+    const { data } = await r.json();
+    const tbody = document.getElementById('tabla-ventas');
+    if (!data?.length) { tbody.innerHTML = '<tr><td colspan="6" class="empty">Sin ventas</td></tr>'; return; }
+    tbody.innerHTML = data.map(v => `
+      <tr>
+        <td>${v.id}</td>
+        <td>#${v.cliente_id}</td>
+        <td>#${v.producto_id}</td>
+        <td>${v.cantidad}</td>
+        <td><strong>S/. ${parseFloat(v.total).toFixed(2)}</strong></td>
+        <td style="color:var(--muted);font-size:.8rem">${new Date(v.createdAt).toLocaleString('es-PE')}</td>
+      </tr>`).join('');
+  } catch { document.getElementById('tabla-ventas').innerHTML = '<tr><td colspan="6" class="empty">Error al conectar</td></tr>'; }
+}
+
+async function crearVenta() {
+  const clienteId  = parseInt(document.getElementById('v-cliente').value);
+  const productoId = parseInt(document.getElementById('v-producto').value);
+  const cantidad   = parseInt(document.getElementById('v-cantidad').value);
+  const total      = parseFloat(document.getElementById('v-total').value);
+
+  if (!clienteId || !productoId || !cantidad || isNaN(total))
+    return toast('Selecciona cliente, producto y cantidad', 'err');
+
+  // Validar stock localmente antes de enviar (UX)
+  const sel = document.getElementById('v-producto');
+  const opt = sel.selectedOptions[0];
+  if (opt && parseInt(opt.dataset.stock) < cantidad)
+    return toast('Stock insuficiente para esa cantidad', 'err');
+
+  try {
+    // La venta pasa por el ESB → orquestación completa
+    const r = await fetch(`${ESB}/ventas`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ cliente_id: clienteId, producto_id: productoId, cantidad, total }),
+    });
+    const d = await r.json();
+    if (d.success) {
+      toast(`Venta #${d.data.id} registrada. Stock actualizado.`);
+      loadVentas();
+    } else {
+      toast(d.message || 'Error en el ESB', 'err');
+    }
+  } catch { toast('Error de red — verifica el ESB', 'err'); }
+}
+
+// ── Init ───────────────────────────────────────────────────
+checkHealth();
+setInterval(checkHealth, 15000);
+loadProductos();
+</script>
+</body>
+</html>

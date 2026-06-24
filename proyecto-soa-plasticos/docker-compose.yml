@@ -1,0 +1,155 @@
+version: '3.9'
+
+# ══════════════════════════════════════════════════════════════
+#  SOA Plasticos — Docker Compose
+#
+#  Red interna: soa-network
+#  Puertos expuestos al host:
+#    3001 → inventario   (desarrollo / Postman)
+#    3002 → clientes     (desarrollo / Postman)
+#    3003 → ventas       (desarrollo / Postman)
+#    8080 → ESB          (punto único de entrada oficial)
+#    8888 → cliente-web  (navegador)
+#    3306 → mysql        (DBeaver / cliente SQL)
+# ══════════════════════════════════════════════════════════════
+
+services:
+
+  # ── MySQL ──────────────────────────────────────────────────
+  mysql:
+    image: mysql:8.0
+    container_name: soa-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: root_password
+      MYSQL_USER: soa_user
+      MYSQL_PASSWORD: soa_password
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./database/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    networks:
+      - soa-network
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "soa_user", "-psoa_password"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  # ── Servicio Inventario ────────────────────────────────────
+  inventario:
+    build: ./inventario
+    container_name: soa-inventario
+    restart: unless-stopped
+    environment:
+      DB_HOST:     mysql
+      DB_PORT:     3306
+      DB_NAME:     db_inventario
+      DB_USER:     soa_user
+      DB_PASSWORD: soa_password
+      PORT:        3001
+    ports:
+      - "3001:3001"
+    networks:
+      - soa-network
+    depends_on:
+      mysql:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3001/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  # ── Servicio Clientes ──────────────────────────────────────
+  clientes:
+    build: ./clientes
+    container_name: soa-clientes
+    restart: unless-stopped
+    environment:
+      DB_HOST:     mysql
+      DB_PORT:     3306
+      DB_NAME:     db_clientes
+      DB_USER:     soa_user
+      DB_PASSWORD: soa_password
+      PORT:        3002
+    ports:
+      - "3002:3002"
+    networks:
+      - soa-network
+    depends_on:
+      mysql:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3002/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  # ── Servicio Ventas ────────────────────────────────────────
+  ventas:
+    build: ./ventas
+    container_name: soa-ventas
+    restart: unless-stopped
+    environment:
+      DB_HOST:     mysql
+      DB_PORT:     3306
+      DB_NAME:     db_ventas
+      DB_USER:     soa_user
+      DB_PASSWORD: soa_password
+      PORT:        3003
+    ports:
+      - "3003:3003"
+    networks:
+      - soa-network
+    depends_on:
+      mysql:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3003/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  # ── ESB (Apache Camel) ─────────────────────────────────────
+  esb:
+    build: ./esb
+    container_name: soa-esb
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    networks:
+      - soa-network
+    depends_on:
+      inventario:
+        condition: service_healthy
+      clientes:
+        condition: service_healthy
+      ventas:
+        condition: service_healthy
+
+  # ── Cliente Web ────────────────────────────────────────────
+  cliente-web:
+    build: ./cliente-web
+    container_name: soa-cliente-web
+    restart: unless-stopped
+    ports:
+      - "8888:80"
+    networks:
+      - soa-network
+    depends_on:
+      - esb
+
+# ── Volúmenes ──────────────────────────────────────────────
+volumes:
+  mysql_data:
+
+# ── Red interna ─────────────────────────────────────────────
+networks:
+  soa-network:
+    driver: bridge

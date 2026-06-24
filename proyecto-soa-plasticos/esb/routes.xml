@@ -1,0 +1,171 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  ESB - Apache Camel Routes
+  Sistema SOA Plasticos
+  
+  Responsabilidades del ESB:
+    1. Punto único de entrada para el cliente web
+    2. Enrutamiento de peticiones a cada microservicio
+    3. Orquestación del flujo de ventas (validación → descuento stock → registro)
+    4. Health check agregado de todos los servicios
+-->
+<routes xmlns="http://camel.apache.org/schema/spring">
+
+  <!-- ══════════════════════════════════════════════════
+       RUTA 1: Health Check Agregado
+       GET http://esb:8080/health
+  ══════════════════════════════════════════════════ -->
+  <route id="health-check">
+    <from uri="jetty:http://0.0.0.0:8080/health"/>
+    <multicast aggregationStrategy="#aggregateHealthStrategy" parallelProcessing="true">
+      <to uri="http://inventario:3001/health?bridgeEndpoint=true"/>
+      <to uri="http://clientes:3002/health?bridgeEndpoint=true"/>
+      <to uri="http://ventas:3003/health?bridgeEndpoint=true"/>
+    </multicast>
+    <setHeader name="Content-Type">
+      <constant>application/json</constant>
+    </setHeader>
+  </route>
+
+  <!-- ══════════════════════════════════════════════════
+       RUTA 2: Proxy — Inventario (GET)
+       GET http://esb:8080/api/productos
+       GET http://esb:8080/api/productos/:id
+  ══════════════════════════════════════════════════ -->
+  <route id="get-productos">
+    <from uri="jetty:http://0.0.0.0:8080/api/productos?matchOnUriPrefix=true&amp;httpMethodRestrict=GET"/>
+    <removeHeaders pattern="CamelHttp*"/>
+    <setHeader name="CamelHttpMethod"><constant>GET</constant></setHeader>
+    <recipientList>
+      <simple>http://inventario:3001/productos${header.CamelHttpPath}?bridgeEndpoint=true</simple>
+    </recipientList>
+    <setHeader name="Content-Type"><constant>application/json</constant></setHeader>
+  </route>
+
+  <!-- POST /api/productos -->
+  <route id="post-producto">
+    <from uri="jetty:http://0.0.0.0:8080/api/productos?httpMethodRestrict=POST"/>
+    <removeHeaders pattern="CamelHttp*"/>
+    <to uri="http://inventario:3001/productos?bridgeEndpoint=true"/>
+    <setHeader name="Content-Type"><constant>application/json</constant></setHeader>
+  </route>
+
+  <!-- ══════════════════════════════════════════════════
+       RUTA 3: Proxy — Clientes (GET)
+       GET http://esb:8080/api/clientes
+       GET http://esb:8080/api/clientes/:id
+  ══════════════════════════════════════════════════ -->
+  <route id="get-clientes">
+    <from uri="jetty:http://0.0.0.0:8080/api/clientes?matchOnUriPrefix=true&amp;httpMethodRestrict=GET"/>
+    <removeHeaders pattern="CamelHttp*"/>
+    <setHeader name="CamelHttpMethod"><constant>GET</constant></setHeader>
+    <recipientList>
+      <simple>http://clientes:3002/clientes${header.CamelHttpPath}?bridgeEndpoint=true</simple>
+    </recipientList>
+    <setHeader name="Content-Type"><constant>application/json</constant></setHeader>
+  </route>
+
+  <!-- POST /api/clientes -->
+  <route id="post-cliente">
+    <from uri="jetty:http://0.0.0.0:8080/api/clientes?httpMethodRestrict=POST"/>
+    <removeHeaders pattern="CamelHttp*"/>
+    <to uri="http://clientes:3002/clientes?bridgeEndpoint=true"/>
+    <setHeader name="Content-Type"><constant>application/json</constant></setHeader>
+  </route>
+
+  <!-- ══════════════════════════════════════════════════
+       RUTA 4: Proxy — Ventas (GET)
+       GET http://esb:8080/api/ventas
+  ══════════════════════════════════════════════════ -->
+  <route id="get-ventas">
+    <from uri="jetty:http://0.0.0.0:8080/api/ventas?matchOnUriPrefix=true&amp;httpMethodRestrict=GET"/>
+    <removeHeaders pattern="CamelHttp*"/>
+    <setHeader name="CamelHttpMethod"><constant>GET</constant></setHeader>
+    <recipientList>
+      <simple>http://ventas:3003/ventas${header.CamelHttpPath}?bridgeEndpoint=true</simple>
+    </recipientList>
+    <setHeader name="Content-Type"><constant>application/json</constant></setHeader>
+  </route>
+
+  <!-- ══════════════════════════════════════════════════
+       RUTA 5: ORQUESTACIÓN DE VENTAS (núcleo del ESB)
+       POST http://esb:8080/api/ventas
+       
+       Flujo:
+         1. Recibir petición de venta del cliente web
+         2. Validar que el cliente existe   → GET clientes/:id
+         3. Validar que el producto existe  → GET inventario/:id
+         4. Verificar stock suficiente      → lógica interna
+         5. Registrar la venta             → POST ventas
+         6. Descontar stock                → PATCH inventario/:id/stock
+         7. Responder al cliente web
+  ══════════════════════════════════════════════════ -->
+  <route id="orquestar-venta">
+    <from uri="jetty:http://0.0.0.0:8080/api/ventas?httpMethodRestrict=POST"/>
+
+    <!-- Guardar cuerpo original de la solicitud -->
+    <setProperty name="ventaOriginal"><simple>${body}</simple></setProperty>
+    <unmarshal><json library="Jackson"/></unmarshal>
+    <setProperty name="clienteId"><simple>${body[cliente_id]}</simple></setProperty>
+    <setProperty name="productoId"><simple>${body[producto_id]}</simple></setProperty>
+    <setProperty name="cantidad"><simple>${body[cantidad]}</simple></setProperty>
+    <setProperty name="total"><simple>${body[total]}</simple></setProperty>
+
+    <!-- PASO 1: Verificar cliente -->
+    <setHeader name="CamelHttpMethod"><constant>GET</constant></setHeader>
+    <setBody><constant></constant></setBody>
+    <toD uri="http://clientes:3002/clientes/${exchangeProperty.clienteId}?bridgeEndpoint=true"/>
+    <choice>
+      <when>
+        <simple>${header.CamelHttpResponseCode} != 200</simple>
+        <setHeader name="CamelHttpResponseCode"><constant>404</constant></setHeader>
+        <setBody><constant>{"success":false,"message":"Cliente no encontrado"}</constant></setBody>
+        <stop/>
+      </when>
+    </choice>
+
+    <!-- PASO 2: Verificar producto y stock -->
+    <setHeader name="CamelHttpMethod"><constant>GET</constant></setHeader>
+    <setBody><constant></constant></setBody>
+    <toD uri="http://inventario:3001/productos/${exchangeProperty.productoId}?bridgeEndpoint=true"/>
+    <choice>
+      <when>
+        <simple>${header.CamelHttpResponseCode} != 200</simple>
+        <setHeader name="CamelHttpResponseCode"><constant>404</constant></setHeader>
+        <setBody><constant>{"success":false,"message":"Producto no encontrado"}</constant></setBody>
+        <stop/>
+      </when>
+    </choice>
+    <unmarshal><json library="Jackson"/></unmarshal>
+    <setProperty name="stockActual"><simple>${body[data][stock]}</simple></setProperty>
+
+    <choice>
+      <when>
+        <!-- Stock insuficiente -->
+        <simple>${exchangeProperty.stockActual} &lt; ${exchangeProperty.cantidad}</simple>
+        <setHeader name="CamelHttpResponseCode"><constant>409</constant></setHeader>
+        <setBody><constant>{"success":false,"message":"Stock insuficiente para completar la venta"}</constant></setBody>
+        <stop/>
+      </when>
+    </choice>
+
+    <!-- PASO 3: Registrar la venta -->
+    <setHeader name="CamelHttpMethod"><constant>POST</constant></setHeader>
+    <setHeader name="Content-Type"><constant>application/json</constant></setHeader>
+    <setBody><simple>{"cliente_id":${exchangeProperty.clienteId},"producto_id":${exchangeProperty.productoId},"cantidad":${exchangeProperty.cantidad},"total":${exchangeProperty.total}}</simple></setBody>
+    <to uri="http://ventas:3003/ventas?bridgeEndpoint=true"/>
+    <setProperty name="ventaResponse"><simple>${body}</simple></setProperty>
+
+    <!-- PASO 4: Descontar stock en inventario -->
+    <setHeader name="CamelHttpMethod"><constant>PATCH</constant></setHeader>
+    <setHeader name="Content-Type"><constant>application/json</constant></setHeader>
+    <setBody><simple>{"cantidad":${exchangeProperty.cantidad}}</simple></setBody>
+    <toD uri="http://inventario:3001/productos/${exchangeProperty.productoId}/stock?bridgeEndpoint=true"/>
+
+    <!-- PASO 5: Responder con la venta registrada -->
+    <setHeader name="CamelHttpResponseCode"><constant>201</constant></setHeader>
+    <setHeader name="Content-Type"><constant>application/json</constant></setHeader>
+    <setBody><simple>${exchangeProperty.ventaResponse}</simple></setBody>
+  </route>
+
+</routes>
